@@ -20,6 +20,8 @@ arrayFactorTx = 1/sqrt(numAntTx)*exp(1i*k*d*(0:numAntTx-1)'*sin(phaseTx.'));
 arrayFactorRx = 1/sqrt(numAntRx)*exp(1i*k*d*(0:numAntRx-1)'*sin(phaseRx.'));
 g = diag(gain);
 
+% take the number of antennas into account, remove the effect of number of
+% paths: the more antennas, the larger power of the channel
 channel = sqrt(numAntTx*numAntRx/numPath)*arrayFactorRx*g*arrayFactorTx';
 
 end

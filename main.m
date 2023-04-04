@@ -7,6 +7,7 @@ numAntRx = 16;
 numPath = 15;
 numStream = 6;
 numRfTx = numStream; % recommend to design Nrf=Ns even Ns<Nrf<2Ns
+numRfRx = numRfTx;
 
 snrVecDb = (-10:6).';
 snrVec = 10.^(snrVecDb/10);
@@ -18,16 +19,18 @@ numMC = 100;  % number of iterations for Monte-Carlo simulation
 % generate_and_save_channel(numAntTx,numAntRx,numPath,numMC);
 
 % initial variables
-capSVD = 0;
-capProp = 0;
+capSVD = 0;     % capacity for fully-digital beamformer
+capPropTx = 0;  % TX analog
+capProp = 0;    % TX + RX
+capPropRx = 0;  % capacity only RX beamforanalog part
 
 for iMC = 1:numMC
-    %% generate channels
+    %% Generate Channels
     % generate or load one channel instance
     % chn = generate_channel(numAntTx,numAntRx,numPath)
     load(['./data/channels/channel-',num2str(iMC),'.mat']);
     
-    %% fully-digital beamforming, no water-filling
+    %% Fully-Digital Beamforming, No Water-Filling
     [~,svVal,V] = svd(chn);  % transmit fully-digital beamformer V*V'~=I!
     svVal = diag(svVal);
     svdGain = svVal(1:numStream).^2;
@@ -43,66 +46,41 @@ for iMC = 1:numMC
     capSvdThis = sum(capSvdThis).';
     capSVD = capSVD + capSvdThis;
 
-    %% proposed
-    F1 = chn'*chn;
-    epsilon = 10^-3;
-    
-    % initialize transmit analog beamformer
-    Vrf = exp(1i*2*pi*rand([numAntTx,numRfTx]));
-    
-    % obtain transmit digital beamformer, no water-filling (assume equal power)
-    Q = Vrf'*Vrf;     % Nrf-by-Nrf
-    Heff = chn*Vrf;   % Nt-by-Nrf
-    [U,D,V] = svd(Heff*Q^(-1/2));
-    Vd = Q^(-1/2)*V(:,1:numStream)/sqrt(numStream); % normalize!!!
-    
-    % calculate initial capacity
-    capPropThis = zeros(snrLen,1);
-    capPropThisNew = zeros(snrLen,1);
+    %% Proposed Algorithm
+    capTxTmp = zeros(snrLen,1);
+    capRxTmp = zeros(snrLen,1);
+    capPropTmp = zeros(snrLen,1);
+
     for snrInd = 1:snrLen
-        capPropThisNew(snrInd) = abs(log2(det( eye(numAntRx)+snrVec(snrInd)*Heff*(Vd*Vd')*Heff' )));
-    end
-    
-    % obtain transmit analog beamformer
-    for snrInd = 1:snrLen
-        diff = inf;
-        count = 0;
-        while diff > epsilon
-            capPropThis(snrInd) = capPropThisNew(snrInd);
-            for rfInd = 1:numRfTx
-                VrfBar = Vrf;
-                VrfBar(:,rfInd) = [];
-                Cj = eye(numStream-1) + snrVec(snrInd)*VrfBar'*F1*VrfBar;
-                Gj = snrVec(snrInd)*F1-(snrVec(snrInd))^2*F1*VrfBar*Cj^(-1)*VrfBar'*F1;
-                for tInd = 1:numAntTx
-                    gj = Gj(tInd,:);
-                    gj(rfInd) = [];
-                    vrfj = Vrf(:,rfInd);
-                    vrfj(rfInd) = [];
-                    Vrf(tInd,rfInd) = exp(1i*angle(gj*vrfj));
-                end
-            end
-            % calculate new digital beamformer wrt the new analog beamformer
-            Q = Vrf'*Vrf;
-            Heff = chn*Vrf;   % Nt-by-Nrf
-            [U,D,V] = svd(Heff*Q^(-1/2));
-            Vd = Q^(-1/2)*V(:,1:numStream)/sqrt(numStream);
-    
-            % calculate new capacity
-            capPropThisNew(snrInd) = abs(log2(det( eye(numAntRx)+snrVec(snrInd)*Heff*(Vd*Vd')*Heff' )));
-            diff = (capPropThisNew(snrInd)-capPropThis(snrInd))/capPropThisNew(snrInd);
+        % TX analog part by assuming Vd*Vd~=gamma^2*.I
+        F1 = chn' * chn;
+        [Vrf,capTxTmp(snrInd)] = hbf_algorithm1(F1,snrVec(snrInd),numAntTx,numRfTx,numStream);
         
-            % count how many iterations to converge
-            count = count+1;
-        end
-    
-        % record the final capacity
-        capPropThis(snrInd) = capPropThisNew(snrInd);
-        disp(['SNR-',num2str(10*log10(snrVec(snrInd))),'dB converged after ',num2str(count),' iterations.']);
+        % TX, no water-filling (assume equal power)
+        Q = Vrf'*Vrf;     % Nrf-by-Nrf
+        Heff = chn*Vrf;   % Nt-by-Nrf
+        [~,~,V] = svd(Heff*Q^(-1/2));
+        Vd = Q^(-1/2)*V(:,1:numStream)/sqrt(numStream);  % normalize to trace(Vd*Vrf'*Vrf*Vd)=1
+
+        % RX analog part with hair in the toilent
+        Vt = Vrf*Vd;
+        F2 = chn*(Vt*Vt')*chn';
+        [Wrf,capRxTmp(snrInd)] = hbf_algorithm1(F2,snrVec(snrInd),numAntRx,numRfRx,numStream);
+        
+        % RX digital part, MMSE
+        J = Wrf'*(chn*(Vt*Vt')*chn')*Wrf+1/snrVec(snrInd)*(Wrf'*Wrf);
+        Wd = J^(-1)*Wrf'*chn*Vt;
+
+        % Calculate the capacity
+        Wt = Wrf*Wd;
+        capPropTmp(snrInd) = abs(log2(det( eye(numAntRx)+snrVec(snrInd)*Wt*(Wt'*Wt)^(-1)*Wt'*(chn*(Vt*Vt')*chn') )));
     end
 
     % record for Monte-Carlo
-    capProp = capProp + capPropThis;
+    capPropTx = capPropTx + capTxTmp;
+    capPropRx = capPropRx + capRxTmp;
+    capProp = capProp + capPropTmp;
+
 end
 
 % average to obtain final capacity
@@ -115,3 +93,4 @@ grid on; hold on;
 plot(snrVecDb,capSVD,'k--',snrVecDb,capProp,'b-o');
 xlabel('SNR (dB)');
 ylabel('Spectral Efficiency (bits/s/Hz)')
+legend('Optimal Fully-Digital Beamforming','Proposed Hybrid Beamforming Algorithm')
