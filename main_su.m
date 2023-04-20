@@ -1,7 +1,7 @@
 % Last revised: Mar 15, 2023
 % Zekai Liang, liang@ice.rwth-aachen.de
 
-%%% Fig 2: capacity, infinite solution
+%% Fig 2: SU, capacity, infinite solution
 numAntTx = 64;
 numAntRx = 16;
 numPath = 15;
@@ -25,12 +25,12 @@ capProp = 0;    % TX + RX
 capPropRx = 0;  % capacity only RX beamforanalog part
 
 for iMC = 1:numMC
-    %% Generate Channels
+    % Generate Channels
     % generate or load one channel instance
     % chn = generate_channel(numAntTx,numAntRx,numPath)
     load(['./data/channels/channel-',num2str(iMC),'.mat']);
     
-    %% Fully-Digital Beamforming, No Water-Filling
+    %%% Fully-Digital Beamforming, No Water-Filling
     [~,svVal,V] = svd(chn);  % transmit fully-digital beamformer V*V'~=I!
     svVal = diag(svVal);
     svdGain = svVal(1:numStream).^2;
@@ -46,7 +46,7 @@ for iMC = 1:numMC
     capSvdThis = sum(capSvdThis).';
     capSVD = capSVD + capSvdThis;
 
-    %% Proposed Algorithm
+    %%% Proposed Algorithm
     capTxTmp = zeros(snrLen,1);
     capRxTmp = zeros(snrLen,1);
     capPropTmp = zeros(snrLen,1);
@@ -73,6 +73,7 @@ for iMC = 1:numMC
 
         % Calculate the capacity
         Wt = Wrf*Wd;
+%         Wt = Wt/norm(Wt,'fro')*sqrt()
         capPropTmp(snrInd) = abs(log2(det( eye(numAntRx)+snrVec(snrInd)*Wt*(Wt'*Wt)^(-1)*Wt'*(chn*(Vt*Vt')*chn') )));
     end
 
@@ -94,3 +95,6 @@ plot(snrVecDb,capSVD,'k--',snrVecDb,capProp,'b-o');
 xlabel('SNR (dB)');
 ylabel('Spectral Efficiency (bits/s/Hz)')
 legend('Optimal Fully-Digital Beamforming','Proposed Hybrid Beamforming Algorithm')
+
+
+%% MU
