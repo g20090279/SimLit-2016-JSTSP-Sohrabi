@@ -7,9 +7,6 @@ snrVecDb = (-10:10).';
 snrVec = 10.^(snrVecDb/10);
 snrLen = length(snrVec);
 
-addpath('C:\Users\liang\Documents\Git-Local\gitlab-iss\communication-systems');
-PA = PowerAllocator();
-
 %% RF precoder
 numUser = 8;
 numAntTx = 64;
@@ -42,7 +39,7 @@ for iMC = 1:numMC
     capFd = zeros(numUser,snrLen);
     for iSnr = 1:snrLen
         % Use Water-Filling to Allocate Power
-        powFd = PA.water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vd);
+        powFd = water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vd);
         VdNew = Vd*diag(sqrt(powFd));
     
         % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
@@ -74,7 +71,7 @@ for iMC = 1:numMC
        
         % Water-Filling Algorithm for Power Allocation
         % Note that for low-SNR case, not every stream is allocated power.
-        powProp = PA.water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vrf*Vd);
+        powProp = water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vrf*Vd);
         VdNew = Vd*sqrt(diag(powProp));
         
         % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
