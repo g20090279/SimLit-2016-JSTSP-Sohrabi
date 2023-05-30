@@ -2,7 +2,7 @@ function powAlloc = water_filling_MIMO_ZF(powMax,powNoise,V)
 % WATER_FILLING_MIMO_ZF returns the optimized transmitter power allocation 
 % scheme by using water-filling algorithm in a MIMO transmission model. The
 % signal model of this MIMO model is
-%                         y = H*V*P*x + n,
+%                        y = H * V * P * x + n,
 % where x is a Ns-by-1 transmit signal vector, n and y are noise vector and
 % receive signal vector with size  Nr-by-1, respectively. P is a diagonal
 % matrix, whose diagonal elements are the optimally allocated transmit
@@ -48,7 +48,8 @@ eps = 1e-5;
 
 % Acquire Diagonal Elements of the Power
 Q = V'*V;  % the diagonal elements must be real-valued
-powEff = powNoise .* diag(Q);
+qkk = abs(diag(Q));  % take out the diagonal elements
+powEff = powNoise .* qkk;
 
 % Initialize the Waterline to the Lowest One
 waterLine = min(powEff);
@@ -56,11 +57,13 @@ powAlloc = max( waterLine - powEff, 0 );
 powAllocTot = sum(powAlloc);
 counter = 0;
 
+% Algorithm: The Idea Is to Raise the Water Level Iteratively to Approach
+% the Power Limit.
 while abs(powMax - powAllocTot) > eps
 
     waterLine = waterLine + (powMax-powAllocTot)/numStream;
     powAlloc =  max( waterLine - powEff, 0 );
-    powAllocTot = sum(powAlloc);
+    powAllocTot = sum(powAlloc);  % power constraint Tr(QP) <= powMax
     counter = counter + 1;
 
 end
@@ -68,6 +71,6 @@ end
 disp(['Water-filling finishes in ',num2str(counter),' iterations']);
 
 % The Final Values of Power Allocation
-powAlloc = 1./powEff .* powAlloc;
+powAlloc = 1./qkk .* powAlloc;
 
 end

@@ -1,9 +1,9 @@
 % Multiuser
-% Last revised: Mar 15, 2023
+% Last revised: May 25, 2023
 % Zekai Liang, liang@ice.rwth-aachen.de
 
 %% Settings
-snrVecDb = (-10:10).';
+snrVecDb = (-10:10).'; % set high SNR to check water-filling algorithm and algorithm 3
 snrVec = 10.^(snrVecDb/10);
 snrLen = length(snrVec);
 
@@ -57,21 +57,15 @@ for iMC = 1:numMC
 
 
     %% Proposed Algorithm
-
-    % Caculate Analog Precoder by Algorithm 3
-    Vrf = hbf_algorithm3(chn,numAntTx,numRfTx);
-    
-    % Caculate Digital Precoder with Zero-Forcing
-    Vd = Vrf'*chn'*(chn*(Vrf*Vrf')*chn')^(-1);
-
     % For Each SNR
     capMu = zeros(numUser,snrLen);
     
     for iSnr = 1:snrLen
-       
-        % Water-Filling Algorithm for Power Allocation
-        % Note that for low-SNR case, not every stream is allocated power.
-        powProp = water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vrf*Vd);
+
+        % Caculate Analog Precoder by Algorithm 3
+        [Vrf,Vd,powProp] = hbf_algorithm3(chn,numAntTx,numRfTx,numUser,snrVec(iSnr));
+        
+        % Add Power Factor to Digital Precoder
         VdNew = Vd*sqrt(diag(powProp));
         
         % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
