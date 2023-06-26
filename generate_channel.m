@@ -1,13 +1,18 @@
-% Generate channel
-% Last revised: Mar. 23, 2023
-% Zekai Liang, liang@ice.rwth-aachen.de
-function channel =  generate_channel(numAntTx, numAntRx, numPath)
+function [chnMat,chnAll] =  generate_channel(numAntTx, numAntRx, numPath)
+% GENERATE_CHANNEL generates a simplified cluster (also called geometric)
+% channel model.
+%
 % Inputs:
-% - numAntTx: the number of transmit antennas
-% - numAntRx: the number of receive antennas
-% - numPath:  the number of paths
+% - numAntTx [scalar]: the number of transmit antennas
+% - numAntRx [scalar]: the number of receive antennas
+% - numPath [scalar]:  the number of paths
+%
 % Outputs:
-% - channel: the channel matrix
+% - chnMat: the generated channel matrix with size numAntRx-by-numAntTx
+% - chnAll: all information for this geometric channel model
+%
+% -Last revised: June. 22, 2023
+% -Zekai Liang, liang@ice.rwth-aachen.de
 
 gain = 1/sqrt(2)*randn(numPath,1) + 1i/sqrt(2)*randn(numPath,1);
 phaseTx = 2*pi*rand(numPath,1);
@@ -22,6 +27,13 @@ g = diag(gain);
 
 % take the number of antennas into account, remove the effect of number of
 % paths: the more antennas, the larger power of the channel
-channel = sqrt(numAntTx*numAntRx/numPath)*arrayFactorRx*g*arrayFactorTx';
+chnMat = sqrt(numAntTx*numAntRx/numPath)*arrayFactorRx*g*arrayFactorTx';
+chnAll = struct(...
+    'pathGain', gain, ...
+    'angleDep', phaseTx, ...
+    'angleArr', phaseRx, ...
+    'antSpace', d, ...
+    'numPath', numPath ...
+    );
 
 end

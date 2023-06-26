@@ -12,29 +12,37 @@ function generate_and_save_channel_mu(numUser,numAntTx,numAntRx,numPath,numChn,t
 %     The default type is 'combined'. The combined channel for all K users
 %     is
 %                       H = [h1,h2,...,hK]^H,
-%     where hk is the channel
+%     where hk is the channel.
 %
 % Outputs:
-% 
+%
 
+chnAll = struct(...
+    'pathGain', 0, ...
+    'angleDep', 0, ...
+    'angleArr', 0, ...
+    'antSpace', 0, ...
+    'numPath', 0 ...
+    );
+chnAll = repmat(chnAll, numUser, 1);
 
 for ind = 1:numChn
 
     % Generate Multiuser Channel
     if type == "combined"
-        chn = zeros(numAntRx*numUser, numAntTx);
+        chnMat = zeros(numAntRx*numUser, numAntTx);  % generated channel matrix
         for iUser = 1:numUser
-            chn((iUser-1)*numAntRx+1:iUser*numAntRx, :) = generate_channel(numAntTx,numAntRx,numPath);
+            [chnMat((iUser-1)*numAntRx+1:iUser*numAntRx, :), chnAll(iUser)] = generate_channel(numAntTx,numAntRx,numPath);
         end
     elseif type == "separated"
-        chn = zeros(numAntRx,numAntTx,numUser);
+        chnMat = zeros(numAntRx,numAntTx,numUser);
         for iUser = 1:numUser
-            chn(:,:,iUser) = generate_channel(numAntTx,numAntRx,numPath);
+            [chnMat(:,:,iUser), chnAll(iUser)] = generate_channel(numAntTx,numAntRx,numPath);
         end
     else
         error("Not supported type of output variable!");
     end
     
-    save(['./data/channels_mu_',num2str(numAntTx),'x',num2str(numAntRx),'/channel-',num2str(ind),'.mat'],'chn');
+    save(['./data/channels_mu_',num2str(numAntTx),'x',num2str(numAntRx),'/channel-',num2str(ind),'.mat'],'chnMat','chnAll');
 end
 end

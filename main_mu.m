@@ -16,13 +16,16 @@ numRfTx2 = numUser;
 numPath = 15;
 
 %% Generate or Load Channels
-numMC = 10;  % number of iterations for Monte-Carlo simulation
+numMC = 100;  % number of iterations for Monte-Carlo simulation
 % generate_and_save_channel(numAntTx,numAntRx,numPath,numMC);\
 
 %% Initialize Variables for Monte-Carlo Simulation
 capFdSum = 0;
 capPropSum = 0;
 capRef33Sum = 0;
+capRef32_1Sum = 0;
+capRef32_2Sum = 0;
+capRef32Sum = 0;
 
 for iMC = 1:numMC
 
@@ -39,7 +42,7 @@ for iMC = 1:numMC
     load(['./data/channels_mu_64x1/channel-',num2str(iMC),'.mat']);
     
     %% Fully-Digital Precoder
-    Vd = chn'*(chn*chn')^(-1);
+    Vd = chnMat'*(chnMat*chnMat')^(-1);
     
     % For Each SNR (Assume the Noise Power equals 1)
     capFd = zeros(numUser,snrLen);
@@ -52,11 +55,10 @@ for iMC = 1:numMC
     
         % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
         for iUser = 1:numUser
-            chnUser = chn(iUser,:);
-            gainTmp = abs(chnUser*VdNew).^2;
-            gainTmpBar = gainTmp;
-            gainTmpBar(iUser) = [];
-            capFd(iUser,iSnr) = log2( 1 + gainTmp(iUser) / (1 + sum(gainTmpBar)) );
+            chnUser = chnMat(iUser,:);
+            powerRx = abs(chnUser*VdNew).^2;
+            capFd(iUser,iSnr) = log2( 1 + powerRx(iUser) / ...
+                ( 1 + sum(powerRx([1:iUser-1,iUser+1:numUser])) ) );
         end
     end
     
@@ -64,24 +66,23 @@ for iMC = 1:numMC
     capFdSum = capFdSum + sum(capFd)';
 
 
-    %% Proposed Algorithm
+    %% Proposed Algorithm: Iterative Analog + ZF Digital
     % For Each SNR (Assume the Noise Power equals 1)
     capMu = zeros(numUser,snrLen);
     for iSnr = 1:snrLen
 
         % Caculate Analog Precoder by Algorithm 3
-        [Vrf,Vd,powProp] = hbf_algorithm3(chn,numAntTx,numRfTx,numUser,snrVec(iSnr));
+        [Vrf,Vd,powProp] = hbf_algorithm3(chnMat,numAntTx,numRfTx,numUser,snrVec(iSnr));
         
         % Add Power Factor to Digital Precoder
         VdNew = Vd*sqrt(diag(powProp));
         
         % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
         for iUser = 1:numUser
-            chnUser = chn(iUser,:);
-            gainTmp = abs(chnUser*Vrf*VdNew).^2;
-            gainTmpBar = gainTmp;
-            gainTmpBar(iUser) = [];
-            capMu(iUser,iSnr) = log2( 1 + gainTmp(iUser) / (1 + sum(gainTmpBar)) );
+            chnUser = chnMat(iUser,:);
+            powerRx = abs(chnUser*Vrf*VdNew).^2;
+            capMu(iUser,iSnr) = log2( 1 + powerRx(iUser) / ...
+                ( 1 + sum(powerRx([1:iUser-1,iUser+1:numUser])) ) );
         end
 
     end
@@ -90,13 +91,15 @@ for iMC = 1:numMC
     capPropSum = capPropSum + sum(capMu)';
 
     
-    %% Reference [33]
+    %% Reference [33]: Analog Conjugate Transpose (eqv. MRC) + Digital ZF
     % The Phase of Analog Beamformer Is the Phase of Conjugate Transpose of
-    % the Composite Channel Matrix
-    Vrf = 1/numAntTx * exp(1i*angle(chn'));
+    % the Composite Channel Matrix. This Is Equivalent to MRC. But In MU
+    % Case, After MRC Analog Beamformer, Interuser-Interference (IUI) Still
+    % Exists. The Digital ZF Helps to Eliminate the IUI.
+    Vrf = 1/numAntTx * exp(1i*angle(chnMat'));
     
     % the Equivalent Channel
-    chnEqv = chn*Vrf;
+    chnEqv = chnMat*Vrf;
 
     % ZF Digital Beamformer
     Vd = chnEqv'*(chnEqv*chnEqv')^-1;
@@ -106,21 +109,56 @@ for iMC = 1:numMC
     for iSnr = 1:snrLen
         % Use Water-Filling Algorithm to Meet Power Constraint
         % (The total beamformer power constraint is ||Vrf*Vd||_F^2=P)
-        powRef33 = water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vrf*Vd);
-        VdNew = Vd*diag(sqrt(powRef33));
+        powAlloc = water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vrf*Vd);
+        VdNew = Vd*diag(sqrt(powAlloc));
 
         % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
         for iUser = 1:numUser
-            chnUser = chn(iUser,:);
-            gainTmp = abs(chnUser*Vrf*VdNew).^2;
-            gainTmpBar = gainTmp;
-            gainTmpBar(iUser) = [];
-            capRef33(iUser,iSnr) = log2( 1 + gainTmp(iUser) / (1 + sum(gainTmpBar)) );
+            chnUser = chnMat(iUser,:);
+            powerRx = abs(chnUser*Vrf*VdNew).^2;
+            capRef33(iUser,iSnr) = log2( 1 + powerRx(iUser) / ...
+                ( 1 + sum(powerRx([1:iUser-1,iUser+1:numUser])) ) );
         end
     end
 
     % the Sum Capacity of All Users
     capRef33Sum = capRef33Sum + sum(capRef33)';
+    
+
+    %% Reference [32]: Hybrid Ananlog Point to Best Path (MUBS) + Digital ZF
+    % Analog Beamformer Pointing to Best Path
+    Vrf = zeros(numAntTx, numUser);
+    for iUser = 1:numUser
+        [~, indMaxGain] = max(abs(chnAll(iUser).pathGain));
+        Vrf(:,iUser) = 1/sqrt(numAntTx)*exp(1i*2*pi*1/2*(0:numAntTx-1)'*sin(chnAll(iUser).angleDep(indMaxGain)));
+    end
+
+    % the Equivalent Channel
+    chnEqv = chnMat*Vrf;
+
+    % ZF Digital Beamformer
+    Vd = chnEqv'*(chnEqv*chnEqv')^-1;
+
+    % For Each SNR (Assume the Noise Power equals 1)
+    capRef32 = zeros(numUser,snrLen);
+    for iSnr = 1:snrLen
+        % Use Water-Filling Algorithm to Meet Power Constraint
+        % (The total beamformer power constraint is ||Vrf*Vd||_F^2=P)
+        powAlloc = water_filling_MIMO_ZF(snrVec(iSnr),ones(numUser,1),Vrf*Vd);
+        VdNew = Vd*diag(sqrt(powAlloc));
+
+        % Calculate Multi-User Capacity, i.e. Sum-Rate of All Users
+        for iUser = 1:numUser
+            chnUser = chnMat(iUser,:);
+            powerRx = abs(chnUser*Vrf*VdNew).^2;
+            capRef32(iUser,iSnr) = log2( 1 + powerRx(iUser) / ...
+                ( 1 + sum(powerRx([1:iUser-1,iUser+1:numUser])) ) );
+        end
+    end
+
+    % the Sum Capacity of All Users
+    capRef32Sum = capRef32Sum + sum(capRef32)';
+    
 
     %% Print the Progress
     disp([num2str(iMC),'-th Monte-Carlo iteration finished!'])
@@ -131,12 +169,16 @@ end
 capFdSum = capFdSum/numMC;
 capPropSum = capPropSum/numMC;
 capRef33Sum = capRef33Sum/numMC;
+capRef32Sum = capRef32Sum/numMC;
 
 %% Plot Figure
 figure;
-plot(snrVecDb,capFdSum,'--k',snrVecDb,capPropSum,'-ob',snrVecDb,capRef33Sum,'-dr');
+plot(snrVecDb,capFdSum,'--k',snrVecDb,capPropSum,'-ob',...
+    snrVecDb,capRef33Sum,'-^r',snrVecDb,capRef32Sum,'-vg');
 hold on;
 grid on;
 xlabel('SNR (dB)');
 ylabel('Sum Rate (bits/s/Hz)');
-legend("Fully-Digital ZF","Proposed Algorithm for N^{RF}=9","Hybrid beamforming in [33], N^{RF}=8");
+legend("Fully-Digital ZF","Proposed Algorithm for N^{RF}=9",...
+    "Hybrid beamforming in [33], N^{RF}=8", ...
+    "Hybrid Beamforming in [32], N^{RF}=8");
