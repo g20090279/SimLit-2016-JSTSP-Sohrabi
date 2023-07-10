@@ -1,23 +1,22 @@
-% Multiuser
-% Last revised: June 09, 2023
+% Multiuser with Infinite-Resolution Phase Shifters
+% Last revised: July 07, 2023
 % Zekai Liang, liang@ice.rwth-aachen.de
 
 %% Settings
+% Considered SNR Range
 snrVecDb = (-10:10).'; % set high SNR to check water-filling algorithm and algorithm 3
 snrVec = 10.^(snrVecDb/10);
 snrLen = length(snrVec);
 
-%% RF precoder
+% System Setting
 numUser = 8;
 numAntTx = 64;
 numAntRx = 1;
-numRfTx = numUser + 1;
-numRfTx2 = numUser;
+numRfTx = numUser + 1; % number of RF chain in the proposed algorithm
 numPath = 15;
 
-%% Generate or Load Channels
+% Simulation Setting
 numMC = 100;  % number of iterations for Monte-Carlo simulation
-% generate_and_save_channel(numAntTx,numAntRx,numPath,numMC);\
 
 %% Initialize Variables for Monte-Carlo Simulation
 capFdSum = 0;
@@ -31,9 +30,10 @@ for iMC = 1:numMC
 
     %% Load or Generate Channels
 
-    % NOTE: the dimension of generated channel of each user is a row
-    % vector. Therefore, the combined channel matrix is H=[h1',...,hK']',
-    % where (.)' is the conjugate transpose (Hermitian).
+    % NOTE: the dimension of generated channel of each user is Nr-by-Nt.
+    % Therefore, the MISO channel for each user is a row-vector (h') and
+    % the combined channel matrix is H=[h1',...,hK']', where (.)' is the
+    % conjugate transpose (Hermitian).
 
     % Generate Multiuser Channel Instance
 %     generate_and_save_channel_mu(numUser,numAntTx,numAntRx,numPath,numMC,'combined');
@@ -68,11 +68,12 @@ for iMC = 1:numMC
 
     %% Proposed Algorithm: Iterative Analog + ZF Digital
     % For Each SNR (Assume the Noise Power equals 1)
-    capMu = zeros(numUser,snrLen);
+    capProp = zeros(numUser,snrLen);
     for iSnr = 1:snrLen
 
         % Caculate Analog Precoder by Algorithm 3
-        [Vrf,Vd,powProp] = hbf_algorithm3(chnMat,numAntTx,numRfTx,numUser,snrVec(iSnr));
+        [Vrf,Vd,powProp] = hbf_algorithm3(chnMat,numAntTx,numRfTx,...
+            numUser,snrVec(iSnr),'infinite');
         
         % Add Power Factor to Digital Precoder
         VdNew = Vd*sqrt(diag(powProp));
@@ -81,14 +82,14 @@ for iMC = 1:numMC
         for iUser = 1:numUser
             chnUser = chnMat(iUser,:);
             powerRx = abs(chnUser*Vrf*VdNew).^2;
-            capMu(iUser,iSnr) = log2( 1 + powerRx(iUser) / ...
+            capProp(iUser,iSnr) = log2( 1 + powerRx(iUser) / ...
                 ( 1 + sum(powerRx([1:iUser-1,iUser+1:numUser])) ) );
         end
 
     end
 
     % the Sum Capacity of All Users
-    capPropSum = capPropSum + sum(capMu)';
+    capPropSum = capPropSum + sum(capProp)';
 
     
     %% Reference [33]: Analog Conjugate Transpose (eqv. MRC) + Digital ZF
@@ -173,8 +174,8 @@ capRef32Sum = capRef32Sum/numMC;
 
 %% Plot Figure
 figure;
-plot(snrVecDb,capFdSum,'--k',snrVecDb,capPropSum,'-ob',...
-    snrVecDb,capRef33Sum,'-^r',snrVecDb,capRef32Sum,'-vg');
+plot(snrVecDb,capFdSum,':k',snrVecDb,capPropSum,'-ob',...
+    snrVecDb,capRef33Sum,'->r',snrVecDb,capRef32Sum,'-<g',LineWidth=1);
 hold on;
 grid on;
 xlabel('SNR (dB)');

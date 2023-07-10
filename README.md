@@ -1,6 +1,6 @@
 # SimLit-2016-JSTSP-Sohrabi
 
-Copyrighted by Zekai Liang, liang@ice.rwth-aachen.de.
+Code Copyrighted by Zekai Liang, liang@ice.rwth-aachen.de.
 
 Reproduce results in the following paper using Matlab:
 
@@ -22,7 +22,7 @@ In the combiner at the receiver, the hybrid beamformer is optimized separately a
 
 ### Multi-User Case
 
-In the precoder, ZF is used as digital beamformer to eliminate the inter-user interference. The analog precoder can be optimized by formulating a similar power minimization problem if analog precoder is fixed. Unlike the single-user case, an alternating optimization is done between digital and analog precoder. For simplicity, MISO system model is used in the multi-user case, where only one antenna is considered at the user side.
+In the precoder, ZF is used as digital beamformer to eliminate the inter-user interference. The analog precoder can be optimized by formulating a similar power minimization problem if digital precoder is fixed. Unlike the single-user case, an alternating optimization is done between digital and analog precoder. For simplicity, MISO system model is used in the multi-user case, where only one antenna is considered at the user side.
 
 # Reproduced Results
 
@@ -36,8 +36,14 @@ Run "main_su.m" for figure 2 (single-user case), and "main_mu.m" for figure 5 (m
 
 *Fig. 2. Spectral efficiencies achieved by different methods in a $64x16$ MIMO system where $N^{RF}=N_s=6$. For hybrid beamforming methods, the use of infinite resolution phase shifters is assumed.*
 
-## Multi-user Case
+## Multi-user Case with Infinite-Resolution Phase Shifter
 
 ![figure 5](./images/figure5.jpg)
 
 *Fig. 5. Sum rate achieved by different methods in an 8-user MISO system with N=64. For hybrid beamforming methods, the use of infinite resolution phase shifters is assumed.*
+
+## Multi-user Case with Finite-Resolution Phase Shifter
+
+![figure 6](./images/figure6.jpg)
+
+*Fig. 6. Sum rate achieved by different methods in a 4-user MISO system with N=64. For the methods with finite resolution phase shifters, b=1.*

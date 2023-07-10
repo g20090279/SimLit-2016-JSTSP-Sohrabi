@@ -3,7 +3,9 @@
 % Zekai Liang, liang@ice.rwth-aachen.de
 % Iterate between power P and analog beamformer Vrf
 
-function [Vrf,Vd,P] = hbf_algorithm3(chn, numAnt, numRf, numUser, snr)
+function [Vrf,Vd,P] = hbf_algorithm3(chn, numAnt, numRf, numUser, snr, mode, codeBook)
+
+if nargin < 7, codeBook = []; end 
 
 % Initialize the Analog Part of the Hybrid Precoder
 P = eye(numUser);  % initial power is an identity matrix
@@ -65,28 +67,45 @@ while diff > eps
                 DjRow(antInd) = [];
 
                 etaD = DjRow * vrfCol;
-
-                cij = (1+ZetaD)*etaB - ZetaB*etaD;
-                zij = imag(2*conj(etaB)*etaD);
-
-                if real(cij) >= 0
-                    phiij = asin(imag(cij)/abs(cij));
+                
+                if mode == "infinite" % For Infinite Resolution Phase Shifter
+                    cij = (1+ZetaD)*etaB - ZetaB*etaD;
+                    zij = imag(2*conj(etaB)*etaD);
+    
+                    if real(cij) >= 0
+                        phiij = asin(imag(cij)/abs(cij));
+                    else
+                        phiij = pi - asin(imag(cij)/abs(cij));
+                    end
+    
+                    theta1 = -phiij + asin(zij/abs(cij));
+                    theta2 = pi - phiij - asin(zij/abs(cij));
+    
+                    % Update
+                    opt1 = exp(-1i*theta1);
+                    opt2 = exp(-1i*theta2);
+                    f1 = (ZetaB+2*real(conj(opt1)*etaB))/(1+ZetaD+2*real(conj(opt1)*etaD));
+                    f2 = (ZetaB+2*real(conj(opt2)*etaB))/(1+ZetaD+2*real(conj(opt2)*etaD));
+                    if f1>=f2
+                        Vrf(antInd,rfInd) = opt1;
+                    else
+                        Vrf(antInd,rfInd) = opt2;
+                    end
+                
+                elseif mode == "finite" % For Finite Resolution Phase Shifter
+                    if isempty(codeBook)
+                        error("Empty codebook");
+                    else
+                        codeBook = codeBook(:);
+                        f = ( ZetaB+2*real(conj(codeBook)*etaB) ) ./ ...
+                            ( 1+ZetaD+2*real(conj(codeBook)*etaD) );
+                        [~,indMax] = max(f);
+                        % Update
+                        Vrf(antInd,rfInd) = codeBook(indMax);
+                    end
+                
                 else
-                    phiij = pi - asin(imag(cij)/abs(cij));
-                end
-
-                theta1 = -phiij + asin(zij/abs(cij));
-                theta2 = pi - phiij - asin(zij/abs(cij));
-
-                % Update
-                opt1 = exp(-1i*theta1);
-                opt2 = exp(-1i*theta2);
-                f1 = ZetaB+2*real(conj(opt1)*etaB)/(1+ZetaD+2*real(conj(opt1)*etaD));
-                f2 = ZetaB+2*real(conj(opt2)*etaB)/(1+ZetaD+2*real(conj(opt2)*etaD));
-                if f1>=f2
-                    Vrf(antInd,rfInd) = opt1;
-                else
-                    Vrf(antInd,rfInd) = opt2;
+                    error("Not supported mode!");
                 end
             end
         end
