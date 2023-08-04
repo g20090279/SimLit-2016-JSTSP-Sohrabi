@@ -1,5 +1,5 @@
-% Multiuser with Infinite-Resolution Phase Shifters
-% Last revised: July 07, 2023
+% Fig. 5: Multiuser with Infinite-Resolution Phase Shifters
+% Last revised: August 04, 2023
 % Zekai Liang, liang@ice.rwth-aachen.de
 
 %% Settings
@@ -174,12 +174,13 @@ capRef32Sum = capRef32Sum/numMC;
 
 %% Plot Figure
 figure;
-plot(snrVecDb,capFdSum,':k',snrVecDb,capPropSum,'-ob',...
+plot(snrVecDb,capFdSum,'k--+',snrVecDb,capPropSum,'-ob',...
     snrVecDb,capRef33Sum,'->r',snrVecDb,capRef32Sum,'-<g',LineWidth=1);
 hold on;
 grid on;
 xlabel('SNR (dB)');
 ylabel('Sum Rate (bits/s/Hz)');
-legend("Fully-Digital ZF","Proposed Algorithm for N^{RF}=9",...
+lgd = legend("Fully-Digital ZF","Proposed Algorithm for N^{RF}=9",...
     "Hybrid beamforming in [33], N^{RF}=8", ...
     "Hybrid Beamforming in [32], N^{RF}=8");
+lgd.Location = "northwest";

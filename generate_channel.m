@@ -11,13 +11,11 @@ function [chnMat,chnAll] =  generate_channel(numAntTx, numAntRx, numPath)
 % - chnMat: the generated channel matrix with size numAntRx-by-numAntTx
 % - chnAll: all information for this geometric channel model
 %
-% -Last revised: June. 22, 2023
-% -Zekai Liang, liang@ice.rwth-aachen.de
 
-gain = 1/sqrt(2)*randn(numPath,1) + 1i/sqrt(2)*randn(numPath,1);
-phaseTx = 2*pi*rand(numPath,1);
+gain = 1/sqrt(2)*randn(numPath,1) + 1i/sqrt(2)*randn(numPath,1); % path gain, following CN(0,1)
+phaseTx = 2*pi*rand(numPath,1); % random phase U(0,2pi)
 phaseRx = 2*pi*rand(numPath,1);
-d = 1/2;
+d = 1/2; % antenna space half wavelength
 k = 2*pi;  % 2*pi*lambda*d
 
 % array factor in matrix form (numAnt x numPath)

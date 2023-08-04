@@ -1,22 +1,18 @@
 # SimLit-2016-JSTSP-Sohrabi
 
-Code Copyrighted by Zekai Liang, liang@ice.rwth-aachen.de.
-
 Reproduce results in the following paper using Matlab:
 
-- Sohrabi, F. & Yu, W. (2016). Hybrid digital and analog beamforming design
-  for large-scale antenna arrays. *IEEE Journal of selected topics in signal
-  processing, 10*(3). https://doi.org/10.1109/JSTSP.2016.2520912
+- Sohrabi, F. & Yu, W. (2016). Hybrid digital and analog beamforming design for large-scale antenna arrays. *IEEE Journal of Selected Topics in Signal processing, 10*(3), pp. 501-513. https://doi.org/10.1109/JSTSP.2016.2520912
 
 ## Brief Introduction of This Paper
 
-This paper introduces a HBF precoding and combining scheme, where beamforming at TX and RX are decoupled, i.e., optimized separately.
+This paper introduces a HBF precoding and combining scheme, where beamforming at TX and RX are decoupled, i.e., optimized separately. A precoder is usually referred to the beamformer at the transmitter, while combiner at the receiver.
 
 **It should be highlighted that the scheme proposed in this paper requires at least $K+1$ RF chains, while most of the other related references assume the number of RF chains is equal to the number of users**.
 
 ### Single-User Case
 
-In the precoder at the transmitter, the digital and analog beamformers are decoupled, where one is optimized assuming another is fixed. The digital beamformer is found by solving the capacity maximization problem with *Water-Filling* algorithm. The methodology to find the analog beamformer is to obtain solutions of the reformulated problem by iterative coordinate descent problem.  
+In the precoder, the digital and analog beamformers are decoupled, where one is optimized assuming another is fixed. The digital beamformer is found by maximizing the capacity with power constraint, which is solved by *SVD* and *Water-Filling* algorithm. The analog beamformer is obtained by using an iterative coordinate descent algorithm to solve a reformulated capacity maximization problem with a relaxed unit norm constraint.  
 
 In the combiner at the receiver, the hybrid beamformer is optimized separately as the precoder. With fixed digital beamformer, the analog beamformer can be optimized in the very similar scheme as the precoder. The digital beamformer is MMSE.
 

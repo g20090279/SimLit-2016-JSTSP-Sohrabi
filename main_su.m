@@ -1,15 +1,16 @@
-% Last revised: Mar 15, 2023
+% Fig. 2: Single-User with Infinite Solution Phase Shifters
+% Last revised: August 04, 2023
 % Zekai Liang, liang@ice.rwth-aachen.de
 
-%% Fig 2: SU, capacity, infinite solution
+%% System Parameters
 numAntTx = 64;
 numAntRx = 16;
 numPath = 15;
 numStream = 6;
-numRfTx = numStream; % recommend to design Nrf=Ns even Ns<Nrf<2Ns
+numRfTx = numStream;
 numRfRx = numRfTx;
 
-snrVecDb = (-10:6).';
+snrVecDb = (-10:2:6).';
 snrVec = 10.^(snrVecDb/10);
 snrLen = length(snrVec);
 
@@ -18,83 +19,82 @@ numMC = 100;  % number of iterations for Monte-Carlo simulation
 % generate and save channels first for Monte-Carlo simulation
 % generate_and_save_channel(numAntTx,numAntRx,numPath,numMC);
 
-% initial variables
-capSVD = 0;     % capacity for fully-digital beamformer
-capPropTx = 0;  % TX analog
-capProp = 0;    % TX + RX
-capPropRx = 0;  % capacity only RX beamforanalog part
+% Initial Variables
+capFd = 0;     % capacity for fully-digital beamforming
+capProp = 0;    % capacity for hybrid beamforming
 
 for iMC = 1:numMC
-    % Generate Channels
+    %% Generate Channels
     % generate or load one channel instance
-    % chn = generate_channel(numAntTx,numAntRx,numPath)
-    load(['./data/channels/channel-',num2str(iMC),'.mat']);
+    chn = generate_channel(numAntTx,numAntRx,numPath);
+    % load(['./data/channels_64x16/channel-',num2str(iMC),'.mat']);
     
-    %%% Fully-Digital Beamforming, No Water-Filling
-    [~,svVal,V] = svd(chn);  % transmit fully-digital beamformer V*V'~=I!
-    svVal = diag(svVal);
-    svdGain = svVal(1:numStream).^2;
+    %% Fully-Digital Beamforming
+    % SVD Decomposition of the Channel: H = U*D*V'
+    gainChn = maxk(eig(chn'*chn),numStream);
     
-    % check the pwer of the beamformer
-    bfDigital = V(:,1:numStream);
-    powBfDigital = trace(bfDigital'*bfDigital);  % equals to numStream, since V is unitary
-    
-    % Since we consider the SNR, we have to make P=1. Therefore, we need to
-    % compensate with a power factor to make the power of beamformer to be 1,
-    % i.e., add factor 1/numStream and make sure Tr(svdGain*svdGain')=1
-    capSvdThis = log2(1 + 1/numStream*svdGain*snrVec.');
-    capSvdThis = sum(capSvdThis).';
-    capSVD = capSVD + capSvdThis;
+    % Note 1: Without loss of generality, set the noise power to be 1, so
+    % that SNR is equivalent to the power. 
+    % Note 2: If the TX and RX beamformers are respectively V and U', the
+    % power of the beamformer is equal to the number of streams. Since all
+    % the transmit power is defined in the SNR, we need to remove the power
+    % of the transmit beamformer, i.e. normalize the transmit beamformer to
+    % be unit power.
+    capFdTmp = sum( log2(1 + 1/numStream*gainChn*snrVec.') ).';
+    capFd = capFd + capFdTmp;
 
-    %%% Proposed Algorithm
-    capTxTmp = zeros(snrLen,1);
-    capRxTmp = zeros(snrLen,1);
+    %% Proposed Algorithm
     capPropTmp = zeros(snrLen,1);
-
-    for snrInd = 1:snrLen
-        % TX analog part by assuming Vd*Vd~=gamma^2*.I
+    Vrf = 0;
+    for iSnr = 1:snrLen
+        % TX Analog Part (Large-Scale Antenna Assumption Vd*Vd~=gamma^2*I)
         F1 = chn' * chn;
-        [Vrf,capTxTmp(snrInd)] = hbf_algorithm1(F1,snrVec(snrInd),numAntTx,numRfTx,numStream);
+        [Vrf,~] = hbf_algorithm1(F1,snrVec(iSnr),numRfTx);
+        % Vrf = exp(1i*2*pi*rand(numAntTx,numRfTx)); % DELETE
         
-        % TX, no water-filling (assume equal power)
+        % TX Digital Part
         Q = Vrf'*Vrf;     % Nrf-by-Nrf
         Heff = chn*Vrf;   % Nt-by-Nrf
         [~,~,V] = svd(Heff*Q^(-1/2));
-        Vd = Q^(-1/2)*V(:,1:numStream)/sqrt(numStream);  % normalize to trace(Vd*Vrf'*Vrf*Vd)=1
-
-        % RX analog part with hair in the toilent
-        Vt = Vrf*Vd;
-        F2 = chn*(Vt*Vt')*chn';
-        [Wrf,capRxTmp(snrInd)] = hbf_algorithm1(F2,snrVec(snrInd),numAntRx,numRfRx,numStream);
         
-        % RX digital part, MMSE
-        J = Wrf'*(chn*(Vt*Vt')*chn')*Wrf+1/snrVec(snrInd)*(Wrf'*Wrf);
-        Wd = J^(-1)*Wrf'*chn*Vt;
+        % Original Model. Assume Equal Power on Each Stream
+        Vd = Q^(-1/2)*V(:,1:numStream)/sqrt(numStream);  % normalize to norm(Vrf*Vd,'fro')=1
+        
+        % A Simplified Model, Assume Equal Power on Each Stream: Vd~=gamma*Ue
+        % Vd = V(:,1:numStream)/sqrt(numRfTx*numAntTx);
 
-        % Calculate the capacity
-        Wt = Wrf*Wd;
-%         Wt = Wt/norm(Wt,'fro')*sqrt()
-        capPropTmp(snrInd) = abs(log2(det( eye(numAntRx)+snrVec(snrInd)*Wt*(Wt'*Wt)^(-1)*Wt'*(chn*(Vt*Vt')*chn') )));
+        % RX Analog Part
+        Vt = Vrf*Vd;     % normalized to be 1
+        F2 = snrVec(iSnr)*chn*(Vt*Vt')*chn';
+        [Wrf,~] = hbf_algorithm1(F2,numAntRx,numRfRx);
+        % Wrf = exp(1i*2*pi*rand(numAntRx,numRfRx)); % DELETE
+        
+        % RX Digital Part, MMSE
+        J = snrVec(iSnr)*Wrf'*(chn*(Vt*Vt')*chn')*Wrf + Wrf'*Wrf;
+        Wd = sqrt(snrVec(iSnr))*J^(-1)*Wrf'*chn*Vt;
+
+        % The Overall Hybrid Combiner
+        Wt = Wrf*Wd; % Note: the power of Wt doesn't affect capacity
+
+        % The Capacity
+        capPropTmp(iSnr) = abs(log2(det( eye(numAntRx) + ...
+            snrVec(iSnr)*Wt*(Wt'*Wt)^(-1)*Wt'*(chn*(Vt*Vt')*chn') )));
     end
 
-    % record for Monte-Carlo
-    capPropTx = capPropTx + capTxTmp;
-    capPropRx = capPropRx + capRxTmp;
+    % Record for Monte-Carlo
     capProp = capProp + capPropTmp;
 
 end
 
 % average to obtain final capacity
-capSVD = capSVD / numMC;
+capFd = capFd / numMC;
 capProp = capProp / numMC;
 
 % plot figure
 figure();
 grid on; hold on;
-plot(snrVecDb,capSVD,'k--',snrVecDb,capProp,'b-o');
+plot(snrVecDb,capFd,'k--+',snrVecDb,capProp,'b-o',LineWidth=1);
 xlabel('SNR (dB)');
 ylabel('Spectral Efficiency (bits/s/Hz)')
-legend('Optimal Fully-Digital Beamforming','Proposed Hybrid Beamforming Algorithm')
-
-
-%% MU
+lgd = legend('Optimal Fully-Digital Beamforming','Proposed Hybrid Beamforming Algorithm');
+lgd.Location = "northwest";
